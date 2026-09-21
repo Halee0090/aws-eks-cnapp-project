@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 .terraform/
 *.tfstate
 *.tfstate.*
@@ -8,3 +9,52 @@ crash.*.log
 .env
 *.pem
 *.key
+=======
+# Terraform
+**/.terraform/*
+*.tfstate
+*.tfstate.*
+*.tfvars
+!*.tfvars.example
+crash.log
+crash.*.log
+.terraform.lock.hcl
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# AWS / 자격 증명
+.aws/
+*.pem
+*.key
+!terraform/**/*.key.example
+
+# Kubernetes
+kubeconfig
+*.kubeconfig
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.iml
+
+# 로그 / 임시 파일
+*.log
+.env
+.env.*
+!.env.example
+
+# Node (필요 시 대시보드/도구용)
+node_modules/
+
+# Python (스크립트용)
+__pycache__/
+*.pyc
+.venv/
+venv/
+>>>>>>> f5cadbb7a53b7572552e3a3cc3647c245b86730e
