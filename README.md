@@ -1,6 +1,5 @@
 # AWS EKS 기반 CNAPP 프로젝트
 
-<<<<<<< HEAD
 AWS EKS 기반 클라우드 네이티브 환경에서 **침해 경로 탐지**, **런타임 위협 탐지**, **CI/CD 보안 게이트**를 구현하는 캡스톤 프로젝트입니다.
 
 Terraform을 사용해 AWS 인프라를 코드화(IaC)하고, Argo CD 기반 GitOps 배포 환경을 구성합니다.  
