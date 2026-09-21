@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: sentinelone-agent
+  namespace: kube-system
+spec:
+  selector:
+    matchLabels:
+      app: sentinelone-agent
+  template:
+    metadata:
+      labels:
+        app: sentinelone-agent
+    spec:
+      containers:
+        - name: sentinelone-agent
+          image: <SENTINELONE_AGENT_IMAGE>
+          securityContext:
+            privileged: true
+# 실제 SentinelOne Kubernetes/Agent 배포 방식과 필요한 Secret/Volume 설정은
+# 사용 중인 라이선스 및 설치 가이드에 맞게 수정한다.
