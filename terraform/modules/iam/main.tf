@@ -40,16 +40,34 @@ data "aws_iam_policy_document" "eks_node_assume_role" {
 resource "aws_iam_role" "eks_node" {
   name               = "${var.project_name}-eks-node-role"
   assume_role_policy = data.aws_iam_policy_document.eks_node_assume_role.json
+
+  tags = {
+    Name = "awscnappeksNodeRole"
+  }
 }
 
+# 1. EKS Worker Node Policy
 resource "aws_iam_role_policy_attachment" "eks_worker" {
   role       = aws_iam_role.eks_node.name
   policy_arn = "arn:aws:iam::aws:policy/AmazonEKSWorkerNodePolicy"
 }
 
-resource "aws_iam_role_policy_attachment" "ecr_pull" {
+# 2. EKS CNI Policy
+resource "aws_iam_role_policy_attachment" "eks_cni" {
   role       = aws_iam_role.eks_node.name
-  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryPullOnly"
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+}
+
+# 3. ECR Read Only Policy (Container Registry ReadOnly)
+resource "aws_iam_role_policy_attachment" "ecr_read_only" {
+  role       = aws_iam_role.eks_node.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerRegistryReadOnly"
+}
+
+# 4. SSM Managed Instance Core Policy
+resource "aws_iam_role_policy_attachment" "ssm_core" {
+  role       = aws_iam_role.eks_node.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
 }
 
 
