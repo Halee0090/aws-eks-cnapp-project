@@ -1,40 +1,106 @@
 # EKS 클러스터 리소스 정의
 resource "aws_eks_cluster" "this" {
-  name     = var.cluster_name                                 # EKS 클러스터 이름
-  role_arn = var.cluster_role_arn                             # EKS 제어 영역에 부여할 IAM 역할 ARN
-  version  = var.k8s_version                                  # 사용할 Kubernetes 버전
+  name     = var.cluster_name
+  role_arn = var.cluster_role_arn
+  version  = var.k8s_version
 
-  vpc_config {
-    subnet_ids              = var.private_subnet_ids          # 클러스터가 사용할 프라이빗 서브넷 목록
-    endpoint_private_access = true                             # 클러스터 엔드포인트를 프라이빗 서브넷에서만 접근 허용
-    endpoint_public_access  = true                            # 클러스터 엔드포인트를 퍼블릭으로는 접근 불가
+  # 기본 Add-on은 아래 aws_eks_addon 리소스에서 관리
+  bootstrap_self_managed_addons = false
+
+  # 클러스터 생성자 관리자 액세스 허용
+  # 인증 모드: EKS API
+  access_config {
+    authentication_mode                         = "API"
+    bootstrap_cluster_creator_admin_permissions = true
   }
+
+  # EKS Control Plane ENI
+  # Public Subnet 2개 + Private Subnet 2개
+  vpc_config {
+    subnet_ids              = var.cluster_subnet_ids
+    endpoint_private_access = true
+    endpoint_public_access  = true
+  }
+
+  # Control Plane 로그 전체 활성화
+  enabled_cluster_log_types = [
+    "api",
+    "audit",
+    "authenticator",
+    "controllerManager",
+    "scheduler"
+  ]
 
   tags = {
-    Name = var.cluster_name                                    # 리소스 이름 태그 지정
+    Name    = var.cluster_name
   }
+}
+
+# Amazon VPC CNI
+resource "aws_eks_addon" "vpc_cni" {
+  cluster_name  = aws_eks_cluster.this.name
+  addon_name    = "vpc-cni"
+  addon_version = "v1.22.4-eksbuild.3"
 }
 
 # EKS 워커 노드 그룹 정의
 resource "aws_eks_node_group" "this" {
-  cluster_name    = aws_eks_cluster.this.name                 # 연결할 클러스터 이름
-  node_group_name = "${var.prefix}-node-group"               # 노드 그룹 이름
-  node_role_arn   = var.node_role_arn                         # 워커 노드에 부여할 IAM 역할
-  subnet_ids      = var.private_subnet_ids                   # 노드 그룹이 배치될 프라이빗 서브넷 목록
-  instance_types  = var.node_instance_types                 # 사용할 EC2 인스턴스 타입
-  capacity_type   = "ON_DEMAND"                              # 온디맨드 인스턴스 사용
+  cluster_name    = aws_eks_cluster.this.name
+  node_group_name = "${var.prefix}-node-group"
+  node_role_arn   = var.node_role_arn
+
+  # Worker Node는 Private Subnet 2개에만 배치
+  subnet_ids = var.private_subnet_ids
+
+  ami_type       = "AL2023_x86_64_STANDARD"
+  capacity_type  = "ON_DEMAND"
+  disk_size      = var.node_disk_size
+  instance_types = var.node_instance_types
 
   scaling_config {
-    desired_size = var.node_desired_size                      # 기본 인스턴스 수
-    max_size     = var.node_max_size                          # 최대 인스턴스 수
-    min_size     = var.node_min_size                          # 최소 인스턴스 수
+    desired_size = var.node_desired_size
+    min_size     = var.node_min_size
+    max_size     = var.node_max_size
   }
 
-  lifecycle {                                                 # 롤링 업데이트 제거(argo rollouts로 카나리 배포할 것이기 때문에)
-    create_before_destroy = true
+  update_config {
+    max_unavailable = 1
+    update_strategy = "DEFAULT"
   }
+
+  node_repair_config {
+    enabled = false
+  }
+
+  # VPC CNI 설치 후 Worker Node 생성
+  depends_on = [
+    aws_eks_addon.vpc_cni
+  ]
 
   tags = {
-    Name = "${var.prefix}-node-group"                         # 태그 이름 설정
+    Name    = "${var.prefix}-node-group"
+    Project = var.project_name
   }
+}
+
+# CoreDNS
+resource "aws_eks_addon" "coredns" {
+  cluster_name  = aws_eks_cluster.this.name
+  addon_name    = "coredns"
+  addon_version = "v1.14.3-eksbuild.23"
+
+  depends_on = [
+    aws_eks_node_group.this
+  ]
+}
+
+# kube-proxy
+resource "aws_eks_addon" "kube_proxy" {
+  cluster_name  = aws_eks_cluster.this.name
+  addon_name    = "kube-proxy"
+  addon_version = "v1.36.0-eksbuild.25"
+
+  depends_on = [
+    aws_eks_node_group.this
+  ]
 }

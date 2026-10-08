@@ -2,6 +2,25 @@
 
 AWS CNAPP 프로젝트 기본 네트워크를 생성한다.
 
+# ─────────────────────────────────────────────
+# modules/vpc : AWS CNAPP 프로젝트 기본 네트워크
+#
+#            Internet
+#               │
+#              IGW
+#               │
+#   ┌───────────┴───────────┐
+#   public-a (1a)       public-b (1b)      ← ALB (Load Balancer Controller)
+#     └ NAT-a             └ NAT-b
+#   private-a (1a)      private-b (1b)     ← EKS Worker Node
+#
+# · Public Subnet  : 0.0.0.0/0 → Internet Gateway
+# · Private Subnet : 0.0.0.0/0 → 같은 AZ의 NAT Gateway
+#     private-a → NAT-a / private-b → NAT-b
+#     한 AZ에 장애가 나도 다른 AZ의 노드는 외부 통신 유지
+# · Subnet Tag : AWS Load Balancer Controller가 ALB 배치 서브넷을 찾는 데 사용
+# ─────────────────────────────────────────────
+
 ## 생성 리소스 (17개)
 
 | 리소스 | 개수 | 내용 |
@@ -43,3 +62,4 @@ AWS CNAPP 프로젝트 기본 네트워크를 생성한다.
 ## 비용 주의
 
 NAT Gateway 2개와 Elastic IP 2개는 생성 시점부터 시간당 과금된다. 실습이 끝나면 팀과 협의해 정리한다.
+
