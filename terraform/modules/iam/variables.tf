@@ -6,11 +6,11 @@ variable "project_name" {
 variable "oidc_provider_arn" {
   type        = string
   description = "EKS OIDC Provider ARN"
-  default     = null
+  # default     = null
 }
 
 variable "decoy_s3_bucket_arn" {
   type        = string
   description = "Decoy S3 Bucket ARN"
-  default     = null
+  # default     = null
 }
