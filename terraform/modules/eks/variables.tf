@@ -18,15 +18,20 @@ variable "cluster_role_arn" {
   type        = string
 }
 
+variable "cluster_subnet_ids" {
+  description = "EKS Control Plane ENI가 사용할 Public/Private 서브넷 ID"
+  type        = list(string)
+}
+
 variable "private_subnet_ids" {
-  description = "EKS 클러스터 및 워커 노드가 사용할 프라이빗 서브넷 ID 목록"
+  description = "EKS Worker Node가 사용할 Private 서브넷 ID"
   type        = list(string)
 }
 
 variable "k8s_version" {
   description = "설치할 Kubernetes 버전"
   type        = string
-  default     = "1.35"
+  default     = "1.36"
 }
 
 variable "node_role_arn" {
@@ -49,7 +54,7 @@ variable "node_min_size" {
 variable "node_max_size" {
   description = "노드그룹 최대 노드 수"
   type        = number
-  default     = 3
+  default     = 10
 }
 
 variable "node_instance_types" {
