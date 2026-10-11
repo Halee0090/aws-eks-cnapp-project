@@ -12,3 +12,8 @@ output "cluster_ca_certificate" {
   description = "클러스터 인증서 데이터 (kubectl 접속용)"
   value       = aws_eks_cluster.this.certificate_authority[0].data
 }
+
+output "oidc_issuer_url" {
+  description = "EKS OIDC 발급자 URL"
+  value = aws_eks_cluster.this.identity[0].oidc[0].issuer
+}
