@@ -14,11 +14,9 @@ module "iam" {
 module "eks" {
   source = "../../modules/eks"
 
-  depends_on = [module.iam]
-
   project_name = var.project_name
-  prefix       = var.prefix
-  cluster_name = var.cluster_name
+  prefix       = var.project_name
+  cluster_name = "${var.project_name}-eks"
 
   cluster_subnet_ids = concat(
     module.vpc.public_subnet_ids,
@@ -26,6 +24,7 @@ module "eks" {
   )
 
   private_subnet_ids = module.vpc.private_subnet_ids
-  cluster_role_arn   = module.iam.cluster_role_arn
-  node_role_arn      = module.iam.node_role_arn
+
+  cluster_role_arn = module.iam.cluster_role_arn
+  node_role_arn    = module.iam.node_role_arn
 }

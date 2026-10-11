@@ -43,19 +43,60 @@ resource "aws_eks_addon" "vpc_cni" {
   addon_version = "v1.22.4-eksbuild.3"
 }
 
+# EKS Worker Node용 Launch Template
+resource "aws_launch_template" "eks_nodes" {
+  name_prefix = "${var.prefix}-node-"
+
+  block_device_mappings {
+    device_name = "/dev/xvda"
+
+    ebs {
+      volume_size           = var.node_disk_size
+      volume_type           = "gp3"
+      encrypted             = true
+      delete_on_termination = true
+    }
+  }
+
+  tag_specifications {
+    resource_type = "instance"
+
+    tags = {
+      Name    = "${var.prefix}-worker-node"
+      Project = var.project_name
+    }
+  }
+
+  tag_specifications {
+    resource_type = "volume"
+
+    tags = {
+      Name    = "${var.prefix}-worker-volume"
+      Project = var.project_name
+    }
+  }
+
+  tags = {
+    Name    = "${var.prefix}-node-launch-template"
+    Project = var.project_name
+  }
+}
+
 # EKS 워커 노드 그룹 정의
 resource "aws_eks_node_group" "this" {
   cluster_name    = aws_eks_cluster.this.name
   node_group_name = "${var.prefix}-node-group"
   node_role_arn   = var.node_role_arn
-
-  # Worker Node는 Private Subnet 2개에만 배치
-  subnet_ids = var.private_subnet_ids
+  subnet_ids      = var.private_subnet_ids
 
   ami_type       = "AL2023_x86_64_STANDARD"
   capacity_type  = "ON_DEMAND"
-  disk_size      = var.node_disk_size
   instance_types = var.node_instance_types
+
+  launch_template {
+    id      = aws_launch_template.eks_nodes.id
+    version = aws_launch_template.eks_nodes.latest_version
+  }
 
   scaling_config {
     desired_size = var.node_desired_size
@@ -65,14 +106,12 @@ resource "aws_eks_node_group" "this" {
 
   update_config {
     max_unavailable = 1
-    update_strategy = "DEFAULT"
   }
 
   node_repair_config {
     enabled = false
   }
 
-  # VPC CNI 설치 후 Worker Node 생성
   depends_on = [
     aws_eks_addon.vpc_cni
   ]
