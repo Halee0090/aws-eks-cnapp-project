@@ -1,0 +1,12 @@
+# security-scan 워크플로가 Trivy로 스캔할 컨테이너 이미지 목록 (한 줄에 하나, # 은 주석)
+#
+# k8s/apps/*/deployment.yaml 의 image 값이 확정되면 여기에도 같은 값을 적는다.
+# 비공개 ECR 이미지는 GitHub OIDC → AWS Role 로그인이 필요하므로
+# "GitHub Actions CI" 작업에서 빌드 직후 스캔하는 단계로 옮긴다 (Access Key 저장 금지).
+
+# DVWA — 일부러 취약한 공격 대상. Critical/High가 많이 나오는 것이 정상이며 "Before" 증거로 사용.
+#        Security Gate를 켤 때는 이 이미지를 차단 대상에서 제외(허용 목록)해야 한다.
+vulnerables/web-dvwa:latest
+
+# normal-app — 이미지가 정해지면 주석 해제
+# <ECR_IMAGE_URI>
