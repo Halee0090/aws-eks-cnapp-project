@@ -1,0 +1,203 @@
+# Image / IaC 보안 스캔
+#   - IaC:        Trivy(config) + Checkov  → terraform/, k8s/
+#   - Dockerfile: hadolint (+ Trivy config가 Dockerfile 설정 오류도 함께 검사)
+#   - Image:      Trivy(image)             → security/images.txt 목록
+# 결과는 SARIF로 GitHub Security 탭(Code scanning)에 올라가고, 요약은 Actions 실행 화면에 표로 남는다.
+#
+# 지금은 "보고 전용(report)" 모드. WBS의 "CI Security Gate(Critical/High 차단)" 작업에서
+# GATE_EXIT_CODE 를 "1" 로 바꾸면 Critical/High 발견 시 PR이 실패한다.
+#
+# 서드파티 Action은 태그가 바꿔치기돼도 안전하도록 커밋 SHA로 고정한다 (주석의 버전은 참고용).
+
+name: security-scan
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "terraform/**"
+      - "k8s/**"
+      - "**/Dockerfile*"
+      - "security/**"
+      - ".github/workflows/security-scan.yml"
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  GATE_SEVERITY: CRITICAL,HIGH
+  GATE_EXIT_CODE: "0" # report 모드. 차단하려면 "1"
+
+jobs:
+  iac-scan:
+    name: IaC scan (Trivy config + Checkov)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Trivy config → SARIF
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: sarif
+          output: trivy-config.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "0"
+          hide-progress: true
+
+      - name: Trivy config → 요약 표
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: config
+          scan-ref: .
+          format: table
+          output: trivy-config.txt
+          severity: ${{ env.GATE_SEVERITY }}
+          exit-code: ${{ env.GATE_EXIT_CODE }}
+          hide-progress: true
+
+      - name: Trivy 결과를 실행 요약에 기록
+        if: always()
+        run: |
+          {
+            echo "## Trivy IaC misconfiguration (${GATE_SEVERITY})"
+            echo '```'
+            cat trivy-config.txt 2>/dev/null || echo "no output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Checkov (terraform + kubernetes + dockerfile)
+        uses: bridgecrewio/checkov-action@6f26dc90000b74feb589a906cdfae540f5119895 # v12.3134.0
+        with:
+          directory: .
+          framework: terraform,kubernetes,dockerfile
+          download_external_modules: true
+          output_format: cli,sarif
+          output_file_path: console,checkov.sarif
+          soft_fail: true
+
+      - name: Upload Trivy SARIF
+        if: always() && hashFiles('trivy-config.sarif') != ''
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: trivy-config.sarif
+          category: trivy-config
+
+      - name: Upload Checkov SARIF
+        if: always() && hashFiles('checkov.sarif') != ''
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: checkov.sarif
+          category: checkov
+
+  dockerfile-lint:
+    name: Dockerfile lint (hadolint)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Dockerfile 찾기
+        id: find
+        run: |
+          files=$(git ls-files | grep -E '(^|/)Dockerfile[^/]*$' || true)
+          if [ -z "$files" ]; then
+            echo "found=false" >> "$GITHUB_OUTPUT"
+            echo "Dockerfile 없음 — normal-app 이미지 빌드용 Dockerfile이 추가되면 자동으로 검사됩니다." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "found=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: hadolint
+        if: steps.find.outputs.found == 'true'
+        uses: hadolint/hadolint-action@06be81baf89a55ffd0e24b8f04a4185738dd3387 # v3.5.0
+        with:
+          recursive: true
+          format: sarif
+          output-file: hadolint.sarif
+          no-fail: true
+
+      - name: Upload hadolint SARIF
+        if: steps.find.outputs.found == 'true' && hashFiles('hadolint.sarif') != ''
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: hadolint.sarif
+          category: hadolint
+
+  image-list:
+    name: 이미지 목록 읽기
+    runs-on: ubuntu-latest
+    outputs:
+      images: ${{ steps.list.outputs.images }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+      - id: list
+        run: |
+          images=$(grep -Ev '^[[:space:]]*(#|$)' security/images.txt 2>/dev/null | awk '{print $1}' | jq -R . | jq -cs .)
+          echo "images=${images:-[]}" >> "$GITHUB_OUTPUT"
+          echo "스캔 대상: ${images:-[]}" >> "$GITHUB_STEP_SUMMARY"
+
+  image-scan:
+    name: Image scan (${{ matrix.image }})
+    needs: image-list
+    if: needs.image-list.outputs.images != '[]'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+    strategy:
+      fail-fast: false
+      matrix:
+        image: ${{ fromJSON(needs.image-list.outputs.images) }}
+    steps:
+      - uses: actions/checkout@08c6903cd8c0fde910a37f88322edcfb5dd907a8 # v5.0.0
+
+      - name: Trivy image → SARIF
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image }}
+          format: sarif
+          output: trivy-image.sarif
+          severity: CRITICAL,HIGH,MEDIUM
+          exit-code: "0"
+          hide-progress: true
+
+      - name: Trivy image → 요약 표
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: image
+          image-ref: ${{ matrix.image }}
+          format: table
+          output: trivy-image.txt
+          severity: ${{ env.GATE_SEVERITY }}
+          exit-code: ${{ env.GATE_EXIT_CODE }}
+          hide-progress: true
+
+      - name: 결과를 실행 요약에 기록
+        if: always()
+        env:
+          IMAGE: ${{ matrix.image }}
+        run: |
+          {
+            echo "## ${IMAGE} (${GATE_SEVERITY})"
+            echo '```'
+            tail -n 80 trivy-image.txt 2>/dev/null || echo "no output"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload image SARIF
+        if: always() && hashFiles('trivy-image.sarif') != ''
+        uses: github/codeql-action/upload-sarif@6f2ac81f5cd81fe351a197ba0b00d91d03cd2aee # v4.39.0
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image-${{ strategy.job-index }}
