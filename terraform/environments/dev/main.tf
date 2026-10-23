@@ -9,6 +9,7 @@ module "iam" {
   source = "../../modules/iam"
 
   project_name = var.project_name
+
 }
 
 module "eks" {
@@ -27,4 +28,12 @@ module "eks" {
 
   cluster_role_arn = module.iam.cluster_role_arn
   node_role_arn    = module.iam.node_role_arn
+}
+
+module "irsa" {
+  source = "../../modules/irsa/oidc-lbc-irsa"
+
+  project_name        = var.project_name
+  oidc_provider_arn   = module.eks.oidc_provider_arn
+  decoy_s3_bucket_arn = module.decoy_s3.s3_bucket_arn
 }

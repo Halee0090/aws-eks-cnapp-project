@@ -13,7 +13,12 @@ output "cluster_ca_certificate" {
   value       = aws_eks_cluster.this.certificate_authority[0].data
 }
 
+output "oidc_provider_arn" {
+  description = "EKS OIDC Provider ARN"
+  value       = aws_iam_openid_connect_provider.eks.arn
+}
+
 output "oidc_issuer_url" {
-  description = "EKS OIDC 발급자 URL"
-  value = aws_eks_cluster.this.identity[0].oidc[0].issuer
+  description = "EKS OIDC Issuer URL"
+  value       = aws_eks_cluster.this.identity[0].oidc[0].issuer
 }
