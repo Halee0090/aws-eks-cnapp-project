@@ -1,7 +1,8 @@
 # Decoy S3 Bucket
 module "decoy_s3" {
   source  = "terraform-aws-modules/s3-bucket/aws"
-  version = "5.15.4"
+  # checkov:skip=CKV_TF_1:Terraform Registry module uses a pinned version
+  version = "5.17.0"
 
   # S3 Bucket 이름은 전 세계에서 고유해야 하므로
   # 접미사를 자동 생성하도록 prefix 사용
